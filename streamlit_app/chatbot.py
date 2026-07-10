@@ -1,6 +1,6 @@
-import streamlit as st
-import requests
-from streamlit_app import config
+import streamlit as st  # type: ignore[import]
+import requests  # type: ignore[import]
+import config
 
 
 st.set_page_config(

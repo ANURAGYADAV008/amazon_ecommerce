@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Request  # pyright: ignore[reportMissingImports]
+from fastapi import APIRouter, FastAPI, Request  # pyright: ignore[reportMissingImports]
 from .models import RAGRequest, RAGResponse, RAGUsedContext
+from .middleware import RequestIDMiddleware
 from rag.reterivalgeneration import rag_pipeline_wrapper  # pyright: ignore[reportMissingImports]
 import logging
 
@@ -21,3 +22,12 @@ def chat(request: Request, payload: RAGRequest) -> RAGResponse:
 
 api_router = APIRouter()
 api_router.include_router(rag_router, prefix="/rag", tags=["rag"])
+
+app = FastAPI(title="Amazon Ecommerce RAG API")
+app.add_middleware(RequestIDMiddleware)
+app.include_router(api_router)
+
+
+@app.get("/health")
+def health() -> dict:
+    return {"status": "ok"}

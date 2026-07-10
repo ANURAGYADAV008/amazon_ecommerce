@@ -1,16 +1,15 @@
 import os
-from openai import OpenAI
-from dotenv import load_dotenv
-from qdrant_client import QdrantClient
-from qdrant_client.models import Distance,VectorParams,PointStruct
+from openai import OpenAI  # type: ignore
+from dotenv import load_dotenv  # type: ignore
+from qdrant_client import QdrantClient  # type: ignore
+from qdrant_client.models import Distance,VectorParams,PointStruct  # type: ignore
 load_dotenv()
 client=OpenAI()
-from langsmith import traceable,get_current_run_tree
+from langsmith import traceable,get_current_run_tree  # type: ignore
 
 
 
 
-# Qdrant host: "http://qdrant:6333" inside docker-compose, "http://localhost:6333" locally.
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 
 @traceable(
