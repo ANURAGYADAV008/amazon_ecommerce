@@ -9,6 +9,10 @@ from langsmith import traceable, get_current_run_tree
 from  .utils import get_tool_descriptions
 from .agent import agent_node,intent_router_node
 from .tools import get_formatted_context
+from langgraph.checkpoint.postgres import PostgresSaver
+from dotenv import load_dotenv
+load_dotenv()
+
 
 
 class Toolcall(BaseModel):
@@ -28,7 +32,7 @@ class State(BaseModel):
     tool_calls:List[Toolcall]=[]
     final_answer:bool=False
     references:Annotated[List[RAGUsedContext],add]=[]
-    trac
+    trace_id:str=""
 
 
 

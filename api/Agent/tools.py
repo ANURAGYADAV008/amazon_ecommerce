@@ -27,8 +27,8 @@ def get_embedding(text,model="text-embedding-3-small"):
     if current_run:
         current_run.metadata["usage_metadata"]={
             "input_token":response.usage.prompt_tokens,
-            "output_token":response.usage.total_tokens
-
+            "output_token":response.usage.total_tokens,
+            "total_token":response.usage.total_tokens
         }
     return response.data[0].embedding
 

@@ -127,6 +127,15 @@ Instructions:
         temperature=0.5,
     )
 
+    current_run=get_current_run_tree()
+
+    if  current_run:
+        current_run.metadata["usage_metadata"]={
+        "input_token":response.usage.prompt_tokens,
+        "output_token":response.usage.total_tokens,
+        "total_token":response.usage.total_tokens
+    }
+
     ai_message = format_ai_message(response)
 
     return {
