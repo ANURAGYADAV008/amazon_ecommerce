@@ -1,17 +1,19 @@
-from qdrant_client import QdrantClient, models
-from qdrant_client.models import  Match,Filter,Field,FieldCondition,MatchValue
+from qdrant_client import QdrantClient
+from qdrant_client.models import Filter,Field,FieldCondition,MatchValue
 from pydantic import BaseModel, Field
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
-from typing import Literal, Annotated, List, Any
+from typing import Annotated, List, Any
 from operator import add
-from langsmith import traceable, get_current_run_tree
+from langsmith import traceable
 from  .utils import get_tool_descriptions
 from .agent import agent_node,intent_router_node
 from .tools import get_formatted_context
 from langgraph.checkpoint.postgres import PostgresSaver
 from dotenv import load_dotenv
 load_dotenv()
+import os
+DB_URI=os.environ.get("DB_URI")
 
 
 

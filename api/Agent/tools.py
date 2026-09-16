@@ -2,14 +2,14 @@ import os
 from openai import OpenAI  # type: ignore
 from dotenv import load_dotenv  # type: ignore
 from qdrant_client import QdrantClient , # type: ignore
-from qdrant_client.models import Distance,VectorParams,PointStruct,Filter,FieldCondition,MatchValue,Prefetch,Document,models  # type: ignore
+from qdrant_client.models import Prefetch,Document,models  # type: ignore
 load_dotenv()
 client=OpenAI()
 from langsmith import traceable,get_current_run_tree  # type: ignore
 import instructor
 import openai
 client2=instructor.from_openai(openai.OpenAI())
-from pydantic import BaseModel,Field
+
 
 @traceable(
     name="embed_query",

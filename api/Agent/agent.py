@@ -6,8 +6,8 @@ import instructor
 from langsmith import traceable, get_current_run_tree
 from openai import OpenAI
 from langchain_core.messages import  convert_to_openai_messages
-from  .utils import format_ai_message,get_tool_descriptions,get_type_from_annotation
-from langsmith import get_current_run_tree
+from  .utils import format_ai_message
+
 class RAGUsedContext(BaseModel):
     id:str=Field(description="The ID Of the item used answer the questions")
     description:str=Field(description="Short description of the item used to answer the Question")
