@@ -1,12 +1,23 @@
 import os
 from openai import OpenAI  # type: ignore
 from dotenv import load_dotenv  # type: ignore
-from qdrant_client import QdrantClient  # type: ignore
-from qdrant_client.models import Distance,VectorParams,PointStruct  # type: ignore
+from qdrant_client import QdrantClient , # type: ignore
+from qdrant_client.models import Distance,VectorParams,PointStruct,Filter,FieldCondition,MatchValue,Prefetch,Document,models  # type: ignore
 load_dotenv()
 client=OpenAI()
 from langsmith import traceable,get_current_run_tree  # type: ignore
+import instructor
+import openai
+client2=instructor.from_openai(openai.OpenAI())
+from pydantic import BaseModel,Field
 
+class RAGUsedContext(BaseModel):
+    id:str=Field(description="The ID Of the item used answer the questions")
+    description:str=Field(description="Short description of the item used to answer the Question")
+
+class RAGGenerationResponse(BaseModel):
+    answer:str=Field(description="The Answer of the Question")
+    refernces:list[RAGUsedContext]=Field(description="List of item used to answer the Question")
 
 
 
@@ -18,6 +29,8 @@ QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
     metadata={"ls_provider":"openai","ls_modelname":"text-embedding-3-small"}
 )
 def get_embedding(text,model="text-embedding-3-small"):
+    """Creates embedding for text using OpenAI's text-embedding-3-small model.
+    """
     response=client.embeddings.create(
         model=model,
         input=text
@@ -35,14 +48,30 @@ def get_embedding(text,model="text-embedding-3-small"):
     name="reteriver_data",
     run_type="retriever"
 )
-def reteriver_data(query, qdrant_client, k):
+def retrieve_data(query, qdrant_client, collection_name='amazon-items-collection-01-hybrid-search', k=5):
     query_embedding = get_embedding(query)
 
-    result = qdrant_client.query_points(
-        collection_name="Amazon_items_collection-00",
-        query=query_embedding,
+    results = qdrant_client.query_points(
+        collection_name=collection_name,
+        prefetch=[
+            Prefetch(
+                query=query_embedding,
+                using="text-embedding-3-small",
+                limit=20
+            ),
+            Prefetch(
+                query=Document(
+                    text=query,
+                    model="qdrant/bm25",
+                ),
+                using="bm25",
+                limit=20
+            )
+        ],
+        query=models.RrfQuery(rrf=models.Rrf(weights=[3,1])),
         limit=k
     )
+
 
     retrieved_context_ids = []
     retrieved_context = []
@@ -51,7 +80,7 @@ def reteriver_data(query, qdrant_client, k):
     retrieved_image_urls = []
     retrieved_prices = []
 
-    for point in result.points:
+    for point in results.points:
         payload = point.payload or {}
         retrieved_context_ids.append(payload.get("parent_asin"))
         retrieved_context.append(payload.get("description", ""))
@@ -122,8 +151,8 @@ Answer:
     metadata={"ls_provider":"openai","ls_modelname":"gpt-4.1-nano"}
 )
 def generate_chat(prompt):
-    response = client.chat.completions.create(
-        model="gpt-4.1-nano",
+    response,raw_response = client2.chat.completions.create_with_completion(
+        model="gpt-4.1-mini",
         messages=[
             {
                 "role": "system",
@@ -132,18 +161,19 @@ def generate_chat(prompt):
             
         ],
         temperature=0.2,
-        max_tokens=300
+        response_model=RAGGenerationResponse
+       
     )
     current_run=get_current_run_tree()
     if current_run and response.usage:
         current_run.metadata["usage_metadata"]={
-            "input_token":response.usage.prompt_tokens,
-            "output_token":response.usage.completion_tokens,
-            "total_token":response.usage.total_tokens
+            "input_token":raw_response.usage.prompt_tokens,
+            "output_token":raw_response.usage.completion_tokens,
+            "total_token":raw_response.usage.total_tokens
 
         }
 
-    return response.choices[0].message.content
+    return response
 
 @traceable(
     name="rag_pipeline"
@@ -151,7 +181,7 @@ def generate_chat(prompt):
 def rag_pipeline(question, top_k=5):
     qdrant_client = QdrantClient(QDRANT_URL)
 
-    retrieved_context = reteriver_data(
+    retrieved_context = retrieve_data(
         question,
         qdrant_client,
         top_k
@@ -161,7 +191,9 @@ def rag_pipeline(question, top_k=5):
         retrieved_context[0],
         retrieved_context[1],
         retrieved_context[2],
-        retrieved_context[3]
+        retrieved_context[3],
+        retrieved_context[4],
+        retrieved_context[5]
     )
 
     prompt = build_prompt(
@@ -170,38 +202,51 @@ def rag_pipeline(question, top_k=5):
     )
 
     answer = generate_chat(prompt)
+    final_result={
+        "original_output":answer,
+        "answer":answer,
+        'references':answer.reference,
+        "Question":question,
+        "reterived_context_ids":retrieved_context[1],
+        "reterived_context":retrieved_context[0],
+        "similarity_score":retrieved_context[3]
+    }
 
-    return answer
+    return final_result,
 
 @traceable(
     name="rag_pipeline_wrapper"
 )
-def rag_pipeline_wrapper(question, top_k=5):
-    """Run the RAG pipeline and return a dict shaped for the API response:
-    {"answer": str, "used_context": [{"image_url", "price", "description"}, ...]}.
-    """
-    qdrant_client = QdrantClient(QDRANT_URL)
+def rag_pipeline_wrapper(question, topk=5):
+    qdrant_client = QdrantClient(url='http://qdrant:6333')
 
-    (
-        context,
-        ids,
-        ratings,
-        scores,
-        image_urls,
-        prices,
-    ) = reteriver_data(question, qdrant_client, top_k)
+    result = rag_pipeline(question, qdrant_client, topk)
 
-    processed_context = process_context(context, ids, ratings, scores)
-    prompt = build_prompt(processed_context, question)
-    answer = generate_chat(prompt)
+    used_context = []
 
-    used_context = [
-        {
-            "image_url": image_url or "",
-            "price": price,
-            "description": description or "",
-        }
-        for image_url, price, description in zip(image_urls, prices, context)
-    ]
+    for reference in result.get('references', []):
+        payload = qdrant_client.scroll(
+            collection_name='amazon-items-collection-01-hybrid-search',
+            with_payload=True,
+            with_vectors=False,
+            scroll_filter=Filter(
+                must=[
+                    FieldCondition(key='parent_asin', match=MatchValue(value=reference.id))
+                ]
+            ),
+        )[0][0].payload
 
-    return {"answer": answer, "used_context": used_context}
+        image_url = payload.get('image', '')
+        price = payload.get('price', None)
+        
+        if image_url:
+            used_context.append({
+                'image_url': image_url,
+                'price': price,
+                'description': reference.description,
+            })
+        
+    return {
+        'answer': result['answer'],
+        'used_context': used_context,
+    }
