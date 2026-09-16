@@ -7,13 +7,15 @@ class RAGRequest(BaseModel):
         ...,
         description="The query to be used in the RAG pipeline"
     )
+    thread_id: str = Field(
+        ...,
+        description="The Thread_id"
+    )
+
 
 
 class RAGUsedContext(BaseModel):
-    image_url: str = Field(
-        ...,
-        description="The URL of the image of the item"
-    )
+    image_url: str = Field(...,description="The URL of the image of the item")
 
     price: Optional[float] = Field(
         None,

@@ -7,7 +7,7 @@ from langsmith import traceable, get_current_run_tree
 from openai import OpenAI
 from langchain_core.messages import  convert_to_openai_messages
 from  .utils import format_ai_message,get_tool_descriptions,get_type_from_annotation
-
+from langsmith import get_current_run_tree
 class RAGUsedContext(BaseModel):
     id:str=Field(description="The ID Of the item used answer the questions")
     description:str=Field(description="Short description of the item used to answer the Question")
@@ -184,6 +184,17 @@ def intent_router_node(state):
         ],
         temperature=0.5,
     )
+
+    current_run=get_current_run_tree()
+    if current_run:
+        current_run.metadata['usage_metadata']={
+            "input_tokens":raw_response.usage.prompt_tokens,
+            "output_token":raw_response.usage.completion_tokens,
+            "total_token":raw_response.usage.total_token
+        }
+        trace_id=str(getattr(current_run,"trace_id",current_run.id))
+    else:
+        trace_id=None
 
     return {
         "question_relevant":response.question_relevant,

@@ -28,6 +28,7 @@ class State(BaseModel):
     tool_calls:List[Toolcall]=[]
     final_answer:bool=False
     references:Annotated[List[RAGUsedContext],add]=[]
+    trac
 
 
 
@@ -82,24 +83,32 @@ workflow.add_edge("tool_node", "agent_node")
 
 graph = workflow.compile()
 
-def run_agent(question:str)->dict:
+def run_agent(question:str,thread_id:str)->dict:
     tools_desc=get_tool_descriptions(tools)
     initial_state = {
     "messages":[{"role":"user","content":"can I get earPhones for myself, a labtop bag for my wife and and something cool for my kids"}],
     "available_tools": tools_desc,
     "iteration":0
     }
-    result=graph.invoke(initial_state)
+    config={
+        "configurable":{
+            "thread_id":thread_id
+        }
+    }
+
+    with PostgresSaver.from_conn_string(DB_URI) as checkpointer:
+     graph=workflow.compile(checkpointer=checkpointer)
+     result=graph.invoke(initial_state,config)
     return result
 
 
 @traceable(
     name="rag_pipeline_wrapper"
 )
-def rag_pipeline_wrapper(question, topk=5):
+def rag_agent_wrapper(question, thread_id,topk=5):
     qdrant_client = QdrantClient(url='http://qdrant:6333')
 
-    result = run_agent(question)
+    result = run_agent(question,thread_id)
 
     used_context = []
 
