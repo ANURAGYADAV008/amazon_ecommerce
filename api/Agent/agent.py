@@ -127,14 +127,15 @@ Instructions:
         temperature=0.5,
     )
 
-    current_run=get_current_run_tree()
+    current_run = get_current_run_tree()
 
-    if  current_run:
-        current_run.metadata["usage_metadata"]={
-        "input_token":response.usage.prompt_tokens,
-        "output_token":response.usage.total_tokens,
-        "total_token":response.usage.total_tokens
-    }
+    if current_run and getattr(raw_response, 'usage', None):
+        usage = raw_response.usage
+        current_run.metadata["usage_metadata"] = {
+            "input_token": getattr(usage, "prompt_tokens", getattr(usage, "input_tokens", 0)),
+            "output_token": getattr(usage, "completion_tokens", getattr(usage, "output_tokens", 0)),
+            "total_token": getattr(usage, "total_tokens", 0)
+        }
 
     ai_message = format_ai_message(response)
 
@@ -166,44 +167,50 @@ def intent_router_node(state):
     </Question>
     -
     """
-    template = Template(prompt_template)
-    prompt = template.render()
-
     messages = state.messages
+    query_text = ""
+    if messages:
+        last_msg = messages[-1]
+        if isinstance(last_msg, dict):
+            query_text = last_msg.get("content", "")
+        elif hasattr(last_msg, "content"):
+            query_text = str(getattr(last_msg, "content", ""))
+
+    template = Template(prompt_template)
+    prompt = template.render(query=query_text)
+
     conversation = []
-    
     for message in messages:
-        conversation.append(convert_to_openai_messages(message))
+        msg = convert_to_openai_messages(message)
+        if isinstance(msg, dict) and msg.get("role") in ["user", "assistant"] and msg.get("content"):
+            conversation.append({"role": msg["role"], "content": str(msg["content"])})
 
-    client = instructor.from_provider(
-        "openai/gpt-5.4-mini",
-        mode=instructor.Mode.RESPONSES_TOOLS
-    )
+    client = instructor.from_openai(OpenAI())
 
-    response,raw_response=client.create_with_completion(
+    response, raw_response = client.chat.completions.create_with_completion(
         model="gpt-4.1-mini",
         response_model=IntentRouterResponse,
         messages=[
             {
-                "role":"system",
-
-                 "content":prompt,
+                "role": "system",
+                "content": prompt,
             },
             *conversation
         ],
         temperature=0.5,
     )
 
-    current_run=get_current_run_tree()
-    if current_run:
-        current_run.metadata['usage_metadata']={
-            "input_tokens":raw_response.usage.prompt_tokens,
-            "output_token":raw_response.usage.completion_tokens,
-            "total_token":raw_response.usage.total_token
+    current_run = get_current_run_tree()
+    if current_run and getattr(raw_response, 'usage', None):
+        usage = raw_response.usage
+        current_run.metadata['usage_metadata'] = {
+            "input_tokens": getattr(usage, "prompt_tokens", getattr(usage, "input_tokens", 0)),
+            "output_tokens": getattr(usage, "completion_tokens", getattr(usage, "output_tokens", 0)),
+            "total_tokens": getattr(usage, "total_tokens", 0)
         }
-        trace_id=str(getattr(current_run,"trace_id",current_run.id))
+        trace_id = str(getattr(current_run, "trace_id", current_run.id))
     else:
-        trace_id=None
+        trace_id = None
 
     return {
         "question_relevant":response.question_relevant,

@@ -48,7 +48,9 @@ def get_embedding(text,model="text-embedding-3-small"):
     name="reteriver_data",
     run_type="retriever"
 )
-def retrieve_data(query, qdrant_client, collection_name='amazon-items-collection-01-hybrid-search', k=5):
+def retrieve_data(query, qdrant_client, collection_name=None, k=5):
+    if collection_name is None:
+        collection_name = os.getenv("QDRANT_COLLECTION_NAME", "Amazon-items-collection-02-hybrid-serach")
     query_embedding = get_embedding(query)
 
     results = qdrant_client.query_points(
@@ -56,7 +58,7 @@ def retrieve_data(query, qdrant_client, collection_name='amazon-items-collection
         prefetch=[
             Prefetch(
                 query=query_embedding,
-                using="text-embedding-3-small",
+                using="text-embedding-model-3-small",
                 limit=20
             ),
             Prefetch(
@@ -225,16 +227,22 @@ def rag_pipeline_wrapper(question, topk=5):
     used_context = []
 
     for reference in result.get('references', []):
-        payload = qdrant_client.scroll(
-            collection_name='amazon-items-collection-01-hybrid-search',
-            with_payload=True,
-            with_vectors=False,
-            scroll_filter=Filter(
-                must=[
-                    FieldCondition(key='parent_asin', match=MatchValue(value=reference.id))
-                ]
-            ),
-        )[0][0].payload
+        try:
+            scroll_results, _ = qdrant_client.scroll(
+                collection_name=os.getenv("QDRANT_COLLECTION_NAME", "Amazon-items-collection-02-hybrid-serach"),
+                with_payload=True,
+                with_vectors=False,
+                scroll_filter=Filter(
+                    must=[
+                        FieldCondition(key='parent_asin', match=MatchValue(value=reference.id))
+                    ]
+                ),
+            )
+            if not scroll_results:
+                continue
+            payload = scroll_results[0].payload or {}
+        except Exception:
+            continue
 
         image_url = payload.get('image', '')
         price = payload.get('price', None)

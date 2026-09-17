@@ -8,7 +8,7 @@ class RAGRequest(BaseModel):
         description="The query to be used in the RAG pipeline"
     )
     thread_id: str = Field(
-        ...,
+        default="default-thread",
         description="The Thread_id"
     )
 

@@ -7,23 +7,14 @@ from typing import Annotated, List, Any
 from operator import add
 from langsmith import traceable
 from  .utils import get_tool_descriptions
-from .agent import agent_node,intent_router_node
+from .agent import agent_node, intent_router_node, Toolcall, RAGUsedContext
 from .tools import get_formatted_context
 from langgraph.checkpoint.postgres import PostgresSaver
 from dotenv import load_dotenv
 load_dotenv()
 import os
-DB_URI=os.environ.get("DB_URI")
 
-
-
-class Toolcall(BaseModel):
-    name:str
-    arguments:dict
-
-class RAGUsedContext(BaseModel):
-    id:str=Field(description="The ID Of the item used answer the questions")
-    description:str=Field(description="Short description of the item used to answer the Question")
+DB_URI = os.environ.get("DB_URI", "postgresql://user:password@localhost:5434/ecommerce")
 
 class State(BaseModel):
     messages:Annotated[List[Any],add]=[]
@@ -102,7 +93,9 @@ def run_agent(question:str,thread_id:str)->dict:
         }
     }
 
-    with PostgresSaver.from_conn_string(DB_URI) as checkpointer:
+    db_uri = os.environ.get("DB_URI", DB_URI)
+    with PostgresSaver.from_conn_string(db_uri) as checkpointer:
+        checkpointer.setup()
         graph = workflow.compile(checkpointer=checkpointer)
         result = graph.invoke(initial_state, config)
     return result
@@ -119,28 +112,35 @@ def rag_agent_wrapper(question, thread_id, topk=5):
     used_context = []
 
     for reference in result.get('references', []):
-        payload = qdrant_client.scroll(
-            collection_name='amazon-items-collection-01-hybrid-search',
-            with_payload=True,
-            with_vectors=False,
-            scroll_filter=Filter(
-                must=[
-                    FieldCondition(key='parent_asin', match=MatchValue(value=reference.id))
-                ]
-            ),
-        )[0][0].payload
+        try:
+            scroll_results, _ = qdrant_client.scroll(
+                collection_name=os.getenv("QDRANT_COLLECTION_NAME", "Amazon-items-collection-02-hybrid-serach"),
+                with_payload=True,
+                with_vectors=False,
+                scroll_filter=Filter(
+                    must=[
+                        FieldCondition(key='parent_asin', match=MatchValue(value=reference.id))
+                    ]
+                ),
+            )
 
-        image_url = payload.get('image', '')
-        price = payload.get('price', None)
-        
-        if image_url:
-            used_context.append({
-                'image_url': image_url,
-                'price': price,
-                'description': reference.description,
-            })
+            if not scroll_results:
+                continue
+
+            payload = scroll_results[0].payload or {}
+            image_url = payload.get('image', payload.get('image_url', ''))
+            price = payload.get('price', None)
+            
+            if image_url:
+                used_context.append({
+                    'image_url': image_url,
+                    'price': price,
+                    'description': reference.description,
+                })
+        except Exception:
+            continue
         
     return {
-        'answer': result['answer'],
+        'answer': result.get('answer', ''),
         'used_context': used_context,
     }

@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 rag_router = APIRouter()
 
+@rag_router.post("")
 @rag_router.post("/")
 def chat(request: Request, payload: RAGRequest) -> RAGResponse:
     result = run_agent_wrapper(payload.query, payload.thread_id)

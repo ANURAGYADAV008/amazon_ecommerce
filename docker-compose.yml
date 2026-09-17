@@ -28,11 +28,14 @@ services:
       - .env
     environment:
       QDRANT_URL: http://ecommerceqdrant:6333
+      DB_URI: postgresql://user:password@ecommerce_postgres:5432/ecommerce
     ports:
       - "8002:8000"
     depends_on:
       ecommerceqdrant:
         condition: service_healthy
+      ecommerce_postgres:
+        condition: service_started
     volumes:
       - .:/app
       - /app/.venv
@@ -53,6 +56,9 @@ services:
       - "8502:8501"
     depends_on:
       - ecommerceapi
+    volumes:
+      - .:/app
+      - /app/.venv
 
   ecommerce_postgres:
     image: postgres:15-alpine

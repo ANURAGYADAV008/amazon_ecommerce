@@ -8,6 +8,7 @@ if str(project_root) not in sys.path:
 
 import streamlit as st  # type: ignore[import]
 import requests  # type: ignore[import]
+import uuid
 from streamlit_app import config
 
 
@@ -53,6 +54,9 @@ if "messages" not in st.session_state:
 if "used_context" not in st.session_state:
     st.session_state.used_context = []
 
+if "thread_id" not in st.session_state:
+    st.session_state.thread_id = str(uuid.uuid4())
+
 #Display the messages
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
@@ -92,11 +96,19 @@ if prompt := st.chat_input("Hi, how can I assist you today?"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        state, output = api_call('post', f'{config.API_URL}/rag', json={'query': prompt})
-        answer = output['answer']
-        used_context = output['used_context']
-        st.session_state.used_context = used_context
-        st.write(answer)
-    st.session_state.messages.append({"role": "assistant", "content": answer})
+        state, output = api_call(
+            'post',
+            f'{config.API_URL}/rag',
+            json={'query': prompt, 'thread_id': st.session_state.thread_id}
+        )
+        if state and isinstance(output, dict) and 'answer' in output:
+            answer = output['answer']
+            used_context = output.get('used_context', [])
+            st.session_state.used_context = used_context
+            st.write(answer)
+            st.session_state.messages.append({"role": "assistant", "content": answer})
+        else:
+            error_msg = output.get('message', output.get('detail', 'Unknown error occurred')) if isinstance(output, dict) else str(output)
+            st.error(f"Error from server: {error_msg}")
     st.rerun()
 
