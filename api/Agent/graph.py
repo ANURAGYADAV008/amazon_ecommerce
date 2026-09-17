@@ -92,27 +92,27 @@ graph = workflow.compile()
 def run_agent(question:str,thread_id:str)->dict:
     tools_desc=get_tool_descriptions(tools)
     initial_state = {
-    "messages":[{"role":"user","content":"can I get earPhones for myself, a labtop bag for my wife and and something cool for my kids"}],
-    "available_tools": tools_desc,
-    "iteration":0
+        "messages": [{"role": "user", "content": question}],
+        "available_tools": tools_desc,
+        "iteration": 0,
     }
-    config={
-        "configurable":{
-            "thread_id":thread_id
+    config = {
+        "configurable": {
+            "thread_id": thread_id
         }
     }
 
     with PostgresSaver.from_conn_string(DB_URI) as checkpointer:
-     graph=workflow.compile(checkpointer=checkpointer)
-     result=graph.invoke(initial_state,config)
+        graph = workflow.compile(checkpointer=checkpointer)
+        result = graph.invoke(initial_state, config)
     return result
 
 
 @traceable(
     name="rag_pipeline_wrapper"
 )
-def rag_agent_wrapper(question, thread_id,topk=5):
-    qdrant_client = QdrantClient(url='http://qdrant:6333')
+def rag_agent_wrapper(question, thread_id, topk=5):
+    qdrant_client = QdrantClient(url=os.getenv("QDRANT_URL", "http://localhost:6335"))
 
     result = run_agent(question,thread_id)
 

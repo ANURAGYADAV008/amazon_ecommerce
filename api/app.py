@@ -1,7 +1,7 @@
 from fastapi import APIRouter, FastAPI, Request  # pyright: ignore[reportMissingImports]
 from .models import RAGRequest, RAGResponse, RAGUsedContext
 from .middleware import RequestIDMiddleware
-from agent.graph import run_agent_wrapper  # pyright: ignore[reportMissingImports]
+from .Agent.graph import rag_agent_wrapper as run_agent_wrapper
 import logging
 
 logging.basicConfig(
@@ -14,8 +14,9 @@ rag_router = APIRouter()
 
 @rag_router.post("/")
 def chat(request: Request, payload: RAGRequest) -> RAGResponse:
-    result = run_agent_wrapper(payload.query,payload.thread_id)
+    result = run_agent_wrapper(payload.query, payload.thread_id)
     return RAGResponse(
+        request_id=getattr(request.state, "request_id", ""),
         answer=result['answer'],
         used_context=[RAGUsedContext(**item) for item in result['used_context']]
     )

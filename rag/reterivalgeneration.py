@@ -21,7 +21,7 @@ class RAGGenerationResponse(BaseModel):
 
 
 
-QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6335")
 
 @traceable(
     name="embed_query",
@@ -218,7 +218,7 @@ def rag_pipeline(question, top_k=5):
     name="rag_pipeline_wrapper"
 )
 def rag_pipeline_wrapper(question, topk=5):
-    qdrant_client = QdrantClient(url='http://qdrant:6333')
+    qdrant_client = QdrantClient(url=QDRANT_URL)
 
     result = rag_pipeline(question, qdrant_client, topk)
 

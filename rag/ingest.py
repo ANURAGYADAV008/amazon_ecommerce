@@ -18,7 +18,7 @@ from qdrant_client.models import Distance, VectorParams, PointStruct  # type: ig
 
 load_dotenv()
 
-QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6335")
 COLLECTION = "Amazon_items_collection-00"
 EMBED_MODEL = "text-embedding-3-small"
 EMBED_DIM = 1536

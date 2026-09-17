@@ -1,7 +1,7 @@
 import os
 from openai import OpenAI  # type: ignore
 from dotenv import load_dotenv  # type: ignore
-from qdrant_client import QdrantClient , # type: ignore
+from qdrant_client import QdrantClient  # type: ignore
 from qdrant_client.models import Prefetch,Document,models  # type: ignore
 load_dotenv()
 client=OpenAI()
@@ -116,7 +116,7 @@ def get_formatted_context(query: str, top_k: int = 5) -> str:
        A string of the top k context chunks with IDs and the average ratings prepending 
        each chunk, each representing an inventory item
     """
-    q_client = QdrantClient(url="http://localhost:6333/")
+    q_client = QdrantClient(url=os.getenv("QDRANT_URL", "http://localhost:6335"))
     context = retrieve_data(query=query, qdrant_client=q_client, k=top_k)
     formatted_context = process_context(
         context=context[0],

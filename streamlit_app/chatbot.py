@@ -1,6 +1,14 @@
+import sys
+from pathlib import Path
+
+# Ensure project root is in sys.path so streamlit_app package is resolvable regardless of execution context
+project_root = Path(__file__).resolve().parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
 import streamlit as st  # type: ignore[import]
 import requests  # type: ignore[import]
-import config
+from streamlit_app import config
 
 
 st.set_page_config(
