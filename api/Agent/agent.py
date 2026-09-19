@@ -214,5 +214,7 @@ def intent_router_node(state):
 
     return {
         "question_relevant":response.question_relevant,
-        "answer":response.answer
+        "answer":response.answer,
+        "trace_id":trace_id
     }
+

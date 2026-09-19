@@ -27,3 +27,9 @@ dependencies = [
     "tqdm>=4.68.4",
     "uvicorn>=0.51.0",
 ]
+
+[tool.pyright]
+include = ["api", "rag", "streamlit_app"]
+venvPath = "."
+venv = ".venv"
+extraPaths = ["."]

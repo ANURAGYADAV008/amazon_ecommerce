@@ -1,7 +1,7 @@
 import os
 from openai import OpenAI  # type: ignore
 from dotenv import load_dotenv  # type: ignore
-from qdrant_client import QdrantClient , # type: ignore
+from qdrant_client import QdrantClient  # type: ignore
 from qdrant_client.models import Distance,VectorParams,PointStruct,Filter,FieldCondition,MatchValue,Prefetch,Document,models  # type: ignore
 load_dotenv()
 client=OpenAI()
@@ -17,7 +17,7 @@ class RAGUsedContext(BaseModel):
 
 class RAGGenerationResponse(BaseModel):
     answer:str=Field(description="The Answer of the Question")
-    refernces:list[RAGUsedContext]=Field(description="List of item used to answer the Question")
+    references:list[RAGUsedContext]=Field(description="List of item used to answer the Question")
 
 
 
@@ -167,7 +167,7 @@ def generate_chat(prompt):
        
     )
     current_run=get_current_run_tree()
-    if current_run and response.usage:
+    if current_run and raw_response.usage:
         current_run.metadata["usage_metadata"]={
             "input_token":raw_response.usage.prompt_tokens,
             "output_token":raw_response.usage.completion_tokens,
@@ -180,22 +180,21 @@ def generate_chat(prompt):
 @traceable(
     name="rag_pipeline"
 )
-def rag_pipeline(question, top_k=5):
-    qdrant_client = QdrantClient(QDRANT_URL)
+def rag_pipeline(question, qdrant_client=None, top_k=5):
+    if qdrant_client is None:
+        qdrant_client = QdrantClient(QDRANT_URL)
 
     retrieved_context = retrieve_data(
         question,
         qdrant_client,
-        top_k
+        k=top_k
     )
 
     processed_context = process_context(
         retrieved_context[0],
         retrieved_context[1],
         retrieved_context[2],
-        retrieved_context[3],
-        retrieved_context[4],
-        retrieved_context[5]
+        retrieved_context[3]
     )
 
     prompt = build_prompt(
@@ -206,15 +205,15 @@ def rag_pipeline(question, top_k=5):
     answer = generate_chat(prompt)
     final_result={
         "original_output":answer,
-        "answer":answer,
-        'references':answer.reference,
+        "answer":answer.answer,
+        'references':answer.references,
         "Question":question,
         "reterived_context_ids":retrieved_context[1],
         "reterived_context":retrieved_context[0],
         "similarity_score":retrieved_context[3]
     }
 
-    return final_result,
+    return final_result
 
 @traceable(
     name="rag_pipeline_wrapper"
@@ -244,7 +243,7 @@ def rag_pipeline_wrapper(question, topk=5):
         except Exception:
             continue
 
-        image_url = payload.get('image', '')
+        image_url = payload.get('image', payload.get('image_url', ''))
         price = payload.get('price', None)
         
         if image_url:
