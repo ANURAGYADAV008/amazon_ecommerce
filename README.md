@@ -6,25 +6,6 @@ The system features **hybrid vector + sparse search (Qdrant BM25 + OpenAI embedd
 
 ---
 
-## 📑 Table of Contents
-
-- [Key Features](#-key-features)
-- [System Architecture](#-system-architecture)
-- [Agent Workflow](#-agent-workflow)
-- [Technology Stack](#-technology-stack)
-- [Repository Structure](#-repository-structure)
-- [Prerequisites](#-prerequisites)
-- [Environment Variables](#-environment-variables)
-- [Quick Start](#-quick-start)
-  - [Method 1: Docker Compose (Recommended)](#method-1-docker-compose-recommended)
-  - [Method 2: Local Development with `uv`](#method-2-local-development-with-uv)
-- [Data Ingestion Pipeline](#-data-ingestion-pipeline)
-- [API Reference](#-api-reference)
-- [Observability & Evaluation (LangSmith)](#-observability--evaluation-langsmith)
-- [License](#-license)
-
----
-
 ## 🏛 System Architecture
 
 ```mermaid
