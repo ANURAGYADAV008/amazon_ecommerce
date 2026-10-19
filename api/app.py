@@ -24,6 +24,7 @@ def chat(request: Request, payload: RAGRequest) -> RAGResponse:
         answer=result['answer'],
         used_context=[RAGUsedContext(**item) for item in result['used_context']],
         trace_id=result.get('trace_id'),
+        shopping_cart=result.get('shopping_cart', []),
     )
 
 

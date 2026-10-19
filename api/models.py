@@ -46,6 +46,10 @@ class RAGResponse(BaseModel):
         default=None,
         description="The Trace ID"
     )
+    shopping_cart: Optional[list[dict]] = Field(
+        default_factory=list,
+        description="Items in the user's shopping cart"
+    )
 
 
 class FeedbackRequest(BaseModel):

@@ -29,6 +29,7 @@ services:
     environment:
       QDRANT_URL: http://ecommerceqdrant:6333
       DB_URI: postgresql://user:password@ecommerce_postgres:5432/ecommerce
+      DATABASE_URL: postgresql://user:password@ecommerce_postgres:5432/ecommerce
     ports:
       - "8002:8000"
     depends_on:

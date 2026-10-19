@@ -253,6 +253,7 @@ if prompt := st.chat_input("Hi, how can I assist you today?"):
 
             st.session_state.used_context = used_context
             st.session_state.trace_id = trace_id
+            st.session_state.shopping_cart = output.get("shopping_cart", [])
             st.session_state.messages.append({"role": "assistant", "content": answer})
 
             st.session_state.latest_feedback = None
