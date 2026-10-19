@@ -6,50 +6,6 @@ The system features **hybrid vector + sparse search (Qdrant BM25 + OpenAI embedd
 
 ---
 
-## 📑 Table of Contents
-
-- [Key Features](#-key-features)
-- [System Architecture](#-system-architecture)
-- [Agent Workflow](#-agent-workflow)
-- [Technology Stack](#-technology-stack)
-- [Repository Structure](#-repository-structure)
-- [Prerequisites](#-prerequisites)
-- [Environment Variables](#-environment-variables)
-- [Quick Start](#-quick-start)
-  - [Method 1: Docker Compose (Recommended)](#method-1-docker-compose-recommended)
-  - [Method 2: Local Development with `uv`](#method-2-local-development-with-uv)
-- [Data Ingestion Pipeline](#-data-ingestion-pipeline)
-- [API Reference](#-api-reference)
-- [Observability & Evaluation (LangSmith)](#-observability--evaluation-langsmith)
-- [License](#-license)
-
----
-
-## ✨ Key Features
-
-- **Multi-Turn Stateful Agent (LangGraph)**:
-  - Preserves full conversation history per `thread_id` backed by a persistent PostgreSQL checkpointer (`PostgresSaver`).
-  - Capable of iterative tool execution and multi-step reasoning before concluding answers.
-- **Intent Router & Guardrails**:
-  - Automatically screens user inputs using structured outputs (`gpt-4.1-mini` via Instructor) to verify queries relate to in-stock inventory before executing database queries.
-- **Hybrid Retrieval (Dense + BM25 + RRF)**:
-  - Dense semantic search using OpenAI's `text-embedding-3-small` (1536 dims).
-  - Lexical full-text search using Qdrant native BM25 sparse matching.
-  - Reciprocal Rank Fusion (RRF, 3:1 weight ratio) to blend keyword precision with semantic depth.
-- **Cohere Semantic Reranking**:
-  - Re-evaluates top retrieved product chunks with `rerank-v4.0-fast` for maximum relevance.
-- **Interactive Streamlit UI**:
-  - Interactive chat interface with thread-based session persistence.
-  - Dedicated **Suggestions Tab** displaying real-time product cards, ASINs, high-resolution imagery, and USD pricing.
-  - **Shopping Cart Tab** for order tracking and basket calculations.
-  - In-app feedback system (Thumbs up/down + optional comment prompt) synced to LangSmith.
-- **Observability & Analytics**:
-  - Deep instrumentation with LangSmith `@traceable` across LLM nodes, embeddings, retrieval steps, and user feedback submission.
-- **Production-Ready Microservices**:
-  - Full Docker containerization with `docker-compose` managing FastAPI, Streamlit, Qdrant vector database, and PostgreSQL.
-
----
-
 ## 🏛 System Architecture
 
 ```mermaid
@@ -116,25 +72,6 @@ stateDiagram-v2
 
 ---
 
-## 🛠 Technology Stack
-
-| Component | Technology | Purpose |
-| :--- | :--- | :--- |
-| **Language** | Python 3.12 | Core programming environment |
-| **Package Manager** | `uv` (Astral) | Ultra-fast dependency resolution and venv management |
-| **API Framework** | FastAPI + Uvicorn | High-performance asynchronous API endpoints |
-| **Agent Orchestration** | LangGraph & LangChain | Stateful graph workflows, tool loops, routing |
-| **State Persistence** | `langgraph-checkpoint-postgres` | Multi-turn conversational memory in PostgreSQL |
-| **LLMs & Schema Validation** | OpenAI `gpt-4.1-mini` + `instructor` | Structured Pydantic outputs and tool invocations |
-| **Vector Database** | Qdrant | Hybrid search engine (Dense Cosine + Sparse BM25 + RRF) |
-| **Embeddings** | OpenAI `text-embedding-3-small` | 1536-dimensional semantic representation |
-| **Reranker** | Cohere `rerank-v4.0-fast` | High-precision cross-encoder reranking |
-| **User Interface** | Streamlit | Chat frontend, suggestion cards, cart, and feedback |
-| **Observability** | LangSmith | Distributed tracing, prompt latency, token counting, and RLHF feedback |
-| **Containerization** | Docker & Docker Compose | Multi-container orchestration |
-
----
-
 ## 📁 Repository Structure
 
 ```plaintext
@@ -165,19 +102,6 @@ amazon_ecommerce/
 ├── pyproject.toml                 # Project metadata and locked dependencies
 └── README.md
 ```
-
----
-
-## 📋 Prerequisites
-
-Before running the application, make sure you have:
-
-- [Docker](https://docs.docker.com/get-docker/) & [Docker Compose](https://docs.docker.com/compose/) installed.
-- (Optional for local running) [uv](https://docs.astral.sh/uv/getting-started/installation/) installed.
-- API Keys for:
-  - **OpenAI** (for embeddings and chat generation)
-  - **LangSmith** (for tracing and evaluation)
-  - **Cohere** (optional, for reranking)
 
 ---
 
@@ -258,56 +182,6 @@ INGEST_DATA_PATH="data/meta_Electronics_2022_23_with_categeory_rating_100_sample
 
 ---
 
-### Method 2: Local Development with `uv`
-
-If you prefer to run services outside Docker for active debugging:
-
-1. **Install dependencies**:
-   ```bash
-   uv sync
-   ```
-
-2. **Start Qdrant & PostgreSQL via Docker**:
-   ```bash
-   docker compose up -d ecommerceqdrant ecommerce_postgres
-   ```
-
-3. **Start the FastAPI backend**:
-   ```bash
-   uv run uvicorn api.app:app --host 0.0.0.0 --port 8000 --reload
-   ```
-
-4. **Start the Streamlit frontend**:
-   ```bash
-   uv run streamlit run streamlit_app/chatbot.py --server.port 8501
-   ```
-
----
-
-## 📦 Data Ingestion Pipeline
-
-To populate your Qdrant vector database with Amazon product data:
-
-1. Place your Amazon electronics dataset (JSONL format) in `data/` or configure `INGEST_DATA_PATH` in `.env`.
-2. Run the ingestion script:
-
-**Via Docker**:
-```bash
-docker compose exec ecommerceapi uv run python -m rag.ingest
-```
-
-**Locally**:
-```bash
-uv run python -m rag.ingest
-```
-
-The script will:
-- Initialize the Qdrant collection with cosine distance and 1536 vector dimension.
-- Parse item titles, feature bullet points, and descriptions.
-- Compute OpenAI batch embeddings.
-- Upsert payload metadata (ASIN, description, average rating, image URL, price) into Qdrant.
-
----
 
 ## 🔌 API Reference
 
@@ -374,14 +248,6 @@ The script will:
 
 ---
 
-## 📊 Observability & Evaluation (LangSmith)
-
-All operations are natively instrumented with **LangSmith**:
-- **Execution Traces**: Inspect every prompt template, LLM invocation latency, input/output token usage, and retrieval results.
-- **Agent Reasoning Loops**: Trace iterative decision-making in `agent_node` and tool execution in `tool_node`.
-- **User Feedback Loop**: User ratings (👍 / 👎) and detailed remarks in the Streamlit UI automatically link to their exact trace run in LangSmith for offline evaluation, debugging, and dataset creation.
-
-Access your telemetry at [smith.langchain.com](https://smith.langchain.com).
 
 ---
 
