@@ -1,3 +1,5 @@
 data
 .env
 .venv
+__pycache__
+rag

@@ -59,7 +59,6 @@ class ShoppingCartAgentResponse(BaseModel):
         "ls_model_name": "gpt-4o-mini",
     },
 )
-
 def product_qna_agent(state) -> dict:
     prompt_template = """
 You are a shopping assistant that can answer questions about the products in stock.
@@ -151,6 +150,7 @@ Instructions:
     )
 
     ai_message = format_ai_message(response)
+    
 
     return {
         "messages": [ai_message],
@@ -399,73 +399,3 @@ def coordinator_agent(state):
             "plan": [item.model_dump() for item in response.plan]
         }
     }
-
-# @traceable(
-#     name="intent_router_node",
-#     run_type="llm",
-#     metadata={"ls_provider":"openai"}
-# )
-# def intent_router_node(state):
-#     prompt_template=""" You are part of a shopping assistant that can answer questions about product in stock
-
-#     Instruction:
-#     -You are given a question and you need to classify it into relevant or not relavant.
-#     -If the question is not relevant ,return False in Field ""question_relavant" and set "answer" to explanation why it is not relevant.
-#     -If the question is relevant , return True in field "question_relavant" and set "answer" to .
-#     - You should only answer question the products in stock. If the question is not about the products in stock ,you should ask for clarification
-#     <Question>
-#     {{query}}
-#     </Question>
-#     -
-#     """
-#     messages = state.messages
-#     query_text = ""
-#     if messages:
-#         last_msg = messages[-1]
-#         if isinstance(last_msg, dict):
-#             query_text = last_msg.get("content", "")
-#         elif hasattr(last_msg, "content"):
-#             query_text = str(getattr(last_msg, "content", ""))
-
-#     template = Template(prompt_template)
-#     prompt = template.render(query=query_text)
-
-#     conversation = []
-#     for message in messages:
-#         msg = convert_to_openai_messages(message)
-#         if isinstance(msg, dict) and msg.get("role") in ["user", "assistant"] and msg.get("content"):
-#             conversation.append({"role": msg["role"], "content": str(msg["content"])})
-
-#     client = instructor.from_openai(OpenAI())
-
-#     response, raw_response = client.chat.completions.create_with_completion(
-#         model="gpt-4.1-mini",
-#         response_model=IntentRouterResponse,
-#         messages=[
-#             {
-#                 "role": "system",
-#                 "content": prompt,
-#             },
-#             *conversation
-#         ],
-#         temperature=0.5,
-#     )
-
-#     current_run = get_current_run_tree()
-#     if current_run and getattr(raw_response, 'usage', None):
-#         usage = raw_response.usage
-#         current_run.metadata['usage_metadata'] = {
-#             "input_tokens": getattr(usage, "prompt_tokens", getattr(usage, "input_tokens", 0)),
-#             "output_tokens": getattr(usage, "completion_tokens", getattr(usage, "output_tokens", 0)),
-#             "total_tokens": getattr(usage, "total_tokens", 0)
-#         }
-#         trace_id = str(getattr(current_run, "trace_id", current_run.id))
-#     else:
-#         trace_id = None
-
-#     return {
-#         "question_relevant":response.question_relevant,
-#         "answer":response.answer,
-#         "trace_id":trace_id
-#     }
-

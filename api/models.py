@@ -25,7 +25,15 @@ class RAGUsedContext(BaseModel):
         ...,
         description="The description of the item"
     )
-
+    id:Optional[str] = Field(
+        None,
+        description="The ID of the item"
+    )
+    rating:Optional[float] = Field(
+        None,
+        description="The rating of the item"
+    )
+    
 
 class RAGResponse(BaseModel):
     request_id: str = Field(

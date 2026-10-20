@@ -175,7 +175,6 @@ def rag_agent_wrapper(question, thread_id, topk=5):
     qdrant_client = QdrantClient(url=os.getenv("QDRANT_URL", "http://localhost:6335"))
 
     result = run_agent(question,thread_id)
-
     used_context = []
 
     for reference in result.get('references', []):
@@ -197,9 +196,12 @@ def rag_agent_wrapper(question, thread_id, topk=5):
             payload = scroll_results[0].payload or {}
             image_url = payload.get('image', payload.get('image_url', ''))
             price = payload.get('price', None)
+            rating = payload.get('average_rating', payload.get('rating', None))
             
             if image_url:
                 used_context.append({
+                    'id': reference.id,
+                    'rating': float(rating) if rating is not None else None,
                     'image_url': image_url,
                     'price': price,
                     'description': reference.description,
@@ -219,6 +221,7 @@ def rag_agent_wrapper(question, thread_id, topk=5):
         }
         for item in shopping_cart
     ]
+    print("Ok print from wrapper2", used_context)
 
     return {
         'answer': result.get('answer', ''),
