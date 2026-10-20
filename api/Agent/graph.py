@@ -221,8 +221,6 @@ def rag_agent_wrapper(question, thread_id, topk=5):
         }
         for item in shopping_cart
     ]
-    print("Ok print from wrapper2", used_context)
-
     return {
         'answer': result.get('answer', ''),
         'used_context': used_context,
