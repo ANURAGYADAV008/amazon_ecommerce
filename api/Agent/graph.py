@@ -3,12 +3,13 @@ from qdrant_client.models import Filter,Field,FieldCondition,MatchValue
 from pydantic import BaseModel, Field
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
+from langchain_core.messages import ToolMessage
 from typing import Annotated, List, Any
 from operator import add
 from langsmith import traceable
 from  .utils import get_tool_descriptions
 from .agent import coordinator_agent, product_qna_agent, shopping_cart_agent,coordinator_agent, RAGUsedContext,Delegation,Toolcall
-from .tools import get_formatted_context,add_to_shopping_cart,remove_from_cart,get_shopping_cart
+from .tools import get_formatted_context, get_formatted_context_with_metadata, add_to_shopping_cart, remove_from_cart, get_shopping_cart
 from langgraph.checkpoint.postgres import PostgresSaver
 from dotenv import load_dotenv
 load_dotenv()
@@ -28,6 +29,13 @@ class AgentProperties(BaseModel):
    final_answer:bool=False
 
 
+def merge_metadata(left: dict, right: dict) -> dict:
+    updated = (left or {}).copy()
+    if right:
+        updated.update(right)
+    return updated
+
+
 class State(BaseModel):
     messages:Annotated[List[Any],add]=[]
     question_relevant:bool=False 
@@ -39,6 +47,7 @@ class State(BaseModel):
     coordinator_agent:CoordinatorAgentProperties=Field(default_factory=CoordinatorAgentProperties)
     user_id:str=""
     cart_id:str=""
+    retrieved_metadata: Annotated[dict[str, dict], merge_metadata] = Field(default_factory=dict)
 
 
 def product_qna_agent_tool_router(state: State) -> str:
@@ -79,10 +88,32 @@ workflow = StateGraph(State)
 product_qna_tools = [get_formatted_context]
 shopping_cart_tools = [add_to_shopping_cart, remove_from_cart, get_shopping_cart]
 
-product_qna_tool_node = ToolNode(product_qna_tools)
+
+def product_qna_tool_node(state: State) -> dict:
+    last_message = state.messages[-1] if state.messages else None
+    tool_messages = []
+    metadata = {}
+
+    if last_message:
+        for tool_call in getattr(last_message, "tool_calls", []):
+            if tool_call.get("name") == "get_formatted_context":
+                args = tool_call.get("args", {})
+                formatted_text, items_meta = get_formatted_context_with_metadata(**args)
+                metadata.update(items_meta)
+                tool_messages.append(
+                    ToolMessage(content=formatted_text, tool_call_id=tool_call.get("id", ""))
+                )
+
+    return {
+        "messages": tool_messages,
+        "retrieved_metadata": metadata,
+    }
+
+
 shopping_cart_tool_node = ToolNode(shopping_cart_tools)
 
 workflow.add_node("product_qna_tool_node", product_qna_tool_node)
+
 workflow.add_node("shopping_cart_tool_node", shopping_cart_tool_node)
 workflow.add_node("product_qna_agent", product_qna_agent)
 workflow.add_node("shopping_cart_agent", shopping_cart_agent)
@@ -128,6 +159,7 @@ def run_agent(question:str,thread_id:str)->dict:
     initial_state = {
         "messages": [{"role": "user", "content": question}],
         "iteration": 0,
+        "retrieved_metadata": {},
         "product_qa_agent":{
           "iteration":0,
           "final_answer":False,
@@ -172,20 +204,34 @@ def run_agent(question:str,thread_id:str)->dict:
     name="rag_pipeline_wrapper"
 )
 def rag_agent_wrapper(question, thread_id, topk=5):
-    qdrant_client = QdrantClient(url=os.getenv("QDRANT_URL", "http://localhost:6335"))
-
-    result = run_agent(question,thread_id)
+    result = run_agent(question, thread_id)
     used_context = []
+    seen_ids = set()
+    retrieved_metadata = result.get('retrieved_metadata', {})
+    qdrant_client = None
 
     for reference in result.get('references', []):
+        ref_id = getattr(reference, 'id', None)
+        if not ref_id or ref_id in seen_ids:
+            continue
+
+        # 1. Fast O(1) in-memory lookup from State (zero Qdrant queries)
+        if ref_id in retrieved_metadata:
+            seen_ids.add(ref_id)
+            used_context.append(retrieved_metadata[ref_id])
+            continue
+
+        # 2. Resilient fallback to Qdrant scroll only if somehow not in cached metadata
         try:
+            if qdrant_client is None:
+                qdrant_client = QdrantClient(url=os.getenv("QDRANT_URL", "http://localhost:6335"))
             scroll_results, _ = qdrant_client.scroll(
                 collection_name=os.getenv("QDRANT_COLLECTION_NAME", "Amazon-items-collection-02-hybrid-serach"),
                 with_payload=True,
                 with_vectors=False,
                 scroll_filter=Filter(
                     must=[
-                        FieldCondition(key='parent_asin', match=MatchValue(value=reference.id))
+                        FieldCondition(key='parent_asin', match=MatchValue(value=ref_id))
                     ]
                 ),
             )
@@ -199,11 +245,12 @@ def rag_agent_wrapper(question, thread_id, topk=5):
             rating = payload.get('average_rating', payload.get('rating', None))
             
             if image_url:
+                seen_ids.add(ref_id)
                 used_context.append({
-                    'id': reference.id,
+                    'id': ref_id,
                     'rating': float(rating) if rating is not None else None,
                     'image_url': image_url,
-                    'price': price,
+                    'price': float(price) if price is not None else None,
                     'description': reference.description,
                 })
         except Exception:

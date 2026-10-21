@@ -46,7 +46,7 @@ def get_embedding(text, model="text-embedding-3-small"):
 )
 def retrieve_data(query, qdrant_client, collection_name=None, k=5):
     if collection_name is None:
-        collection_name = os.getenv("QDRANT_COLLECTION_NAME", "Amazon-items-collection-02-hybrid-serach")
+        collection_name = os.getenv("QDRANT_COLLECTION_NAME")
     query_embedding = get_embedding(query)
 
     results = qdrant_client.query_points(
@@ -166,6 +166,40 @@ def retrivererank(query, context, top_n=None):
     )
 
 
+def get_formatted_context_with_metadata(query: str, top_k: int = 6) -> tuple[str, dict]:
+    """Get the top k context each representing an inventory item for a given query,
+    along with a dictionary mapping product IDs to their full metadata.
+    """
+    q_client = QdrantClient(url=os.getenv("QDRANT_URL"),api_key=os.getenv("QDRANT_API_KEY"))
+    context = retrieve_data(query=query, qdrant_client=q_client, k=top_k)
+    ##context = retrivererank(query=query, context=context, top_n=7)
+    formatted_context = process_context(
+        context=context[0],
+        ids=context[1],
+        ratings=context[2],
+        scores=context[3]
+    )
+
+    metadata = {}
+    descriptions = context[0] if len(context) > 0 else []
+    ids = context[1] if len(context) > 1 else []
+    ratings = context[2] if len(context) > 2 else []
+    image_urls = context[4] if len(context) > 4 else []
+    prices = context[5] if len(context) > 5 else []
+
+    for i, asin in enumerate(ids):
+        if asin:
+            metadata[asin] = {
+                "id": asin,
+                "description": descriptions[i] if i < len(descriptions) else "",
+                "rating": float(ratings[i]) if i < len(ratings) and ratings[i] is not None else None,
+                "image_url": image_urls[i] if i < len(image_urls) else "",
+                "price": float(prices[i]) if i < len(prices) and prices[i] is not None else None,
+            }
+
+    return formatted_context, metadata
+
+
 def get_formatted_context(query: str, top_k: int = 6) -> str:
     """ Get the top k context each representing an inventory 
       item for a given query
@@ -178,15 +212,7 @@ def get_formatted_context(query: str, top_k: int = 6) -> str:
        A string of the top k context chunks with IDs and the average ratings prepending 
        each chunk, each representing an inventory item
     """
-    q_client = QdrantClient(url=os.getenv("QDRANT_URL", "http://localhost:6335"))
-    context = retrieve_data(query=query, qdrant_client=q_client, k=6)
-    ##context = retrivererank(query=query, context=context, top_n=7)
-    formatted_context = process_context(
-        context=context[0],
-        ids=context[1],
-        ratings=context[2],
-        scores=context[3]
-    )
+    formatted_context, _ = get_formatted_context_with_metadata(query=query, top_k=top_k)
     return formatted_context
 
 from psycopg2.extras import RealDictCursor
@@ -239,7 +265,7 @@ def add_to_shopping_cart(items: list[dict], user_id: str, cart_id: str) -> str:
             product_id = item['product_id']
             quantity = item['quantity']
 
-            qdrant_client = QdrantClient(url=os.getenv("QDRANT_URL", "http://localhost:6335"))
+            qdrant_client = QdrantClient(url=os.getenv("QDRANT_URL"),api_key=os.getenv("QDRANT_API_KEY"))
 
             dummy_vector = np.zeros(1536).tolist()
             payload = qdrant_client.query_points(
