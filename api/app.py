@@ -6,6 +6,11 @@ from .models import RAGRequest,RAGResponse,RAGUsedContext,FeedbackRequest,Feedba
 from .middleware import RequestIDMiddleware
 from .Agent.graph import rag_agent_wrapper
 from .processors import submit_feedback
+from slowapi.util import get_remote_address
+from slowapi import Limiter
+from slowapi.middleware import SlowAPIASGIMiddleware
+from slowapi.errors import RateLimitExceeded
+from fastapi.responses import JSONResponse
 
 logging.basicConfig(
     level=logging.INFO,
@@ -16,9 +21,13 @@ logger = logging.getLogger(__name__)
 rag_router = APIRouter()
 feedback_router = APIRouter()
 
+limiter=Limiter(key_func=get_remote_address)
 
-@rag_router.post("")
+
+
+
 @rag_router.post("/")
+@limiter.limit("2/minute")
 def chat(request: Request, payload: RAGRequest) -> RAGResponse:
     try:
         result = rag_agent_wrapper(payload.query, payload.thread_id)
@@ -37,7 +46,6 @@ def chat(request: Request, payload: RAGRequest) -> RAGResponse:
         )
 
 
-@feedback_router.post("")
 @feedback_router.post("/")
 def send_feedback(request: Request, payload: FeedbackRequest) -> FeedbackResponse:
     try:
@@ -88,6 +96,19 @@ def _cors_origins() -> list[str]:
 
 
 app = FastAPI(title="Amazon Ecommerce RAG API")
+app.state.limiter=limiter
+
+app.add_exception_handler(
+    RateLimitExceeded,
+     # pyrefly: ignore[bad-argument-count]
+    lambda request,exc:JSONResponse(
+        status_code=429,
+        content={"details":"Too many request",},
+
+    )
+    
+)
+
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(
     CORSMiddleware,

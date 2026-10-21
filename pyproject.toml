@@ -20,6 +20,7 @@ dependencies = [
     "qdrant-client>=1.18.0",
     "tqdm>=4.68.4",
     "uvicorn>=0.51.0",
+    "slowapi>=0.1.10",
 ]
 
 [tool.pyright]
