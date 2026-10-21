@@ -197,6 +197,11 @@ def run_agent(question:str,thread_id:str)->dict:
     if not db_uri:
         raise ValueError("DB_URI or DATABASE_URL environment variable is not set. Please add it to your environment or Vercel dashboard.")
 
+    # PostgresSaver uses psycopg in pipeline mode which is unsupported by PgBouncer (Neon pooler in transaction mode).
+    # Using direct Neon connection prevents 'server closed the connection unexpectedly'.
+    if "neon.tech" in db_uri and "-pooler" in db_uri:
+        db_uri = db_uri.replace("-pooler", "")
+
     global _checkpointer_setup_done
     with PostgresSaver.from_conn_string(db_uri) as checkpointer:
         if not _checkpointer_setup_done:
@@ -231,7 +236,7 @@ def rag_agent_wrapper(question, thread_id, topk=5):
         # 2. Resilient fallback to Qdrant scroll only if somehow not in cached metadata
         try:
             if qdrant_client is None:
-                qdrant_client = QdrantClient(url=os.getenv("QDRANT_URL", "http://localhost:6335"))
+                qdrant_client = QdrantClient(url=os.getenv("QDRANT_URL"),api_key=os.getenv("QDRANT_API_KEY"))
             scroll_results, _ = qdrant_client.scroll(
                 collection_name=os.getenv("QDRANT_COLLECTION_NAME", "Amazon-items-collection-02-hybrid-serach"),
                 with_payload=True,

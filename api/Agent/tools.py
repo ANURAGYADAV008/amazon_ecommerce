@@ -4,7 +4,7 @@ import os
 from dotenv import load_dotenv  # type: ignore
 from openai import OpenAI  # type: ignore
 from qdrant_client import QdrantClient  # type: ignore
-from qdrant_client.models import Prefetch, Document, models ,Filter,MatchValue,FieldCondition,FusionQuery # type: ignore
+from qdrant_client.models import Prefetch, Document, models, Filter, MatchValue, FieldCondition, FusionQuery, PayloadSchemaType # type: ignore
 from langsmith import traceable, get_current_run_tree  # type: ignore
 import instructor
 import openai
@@ -264,43 +264,81 @@ def add_to_shopping_cart(items: list[dict], user_id: str, cart_id: str) -> str:
     """
 
     conn = get_db_connection()
+    collection_name = os.getenv("QDRANT_COLLECTION_NAME", "Amazon-items-collection-02-hybrid-serach")
+    qdrant_client = QdrantClient(url=os.getenv("QDRANT_URL"), api_key=os.getenv("QDRANT_API_KEY"))
 
     with conn.cursor(cursor_factory=RealDictCursor) as cursor:
         
         for item in items:
             product_id = item['product_id']
-            quantity = item['quantity']
+            quantity = item.get('quantity', 1)
 
-            qdrant_client = QdrantClient(url=os.getenv("QDRANT_URL"),api_key=os.getenv("QDRANT_API_KEY"))
-
-            dummy_vector = np.zeros(1536).tolist()
-            payload = qdrant_client.query_points(
-                collection_name="Amazon-items-collection-02-hybrid-serach",
-                prefetch=[
-                    Prefetch(
-                        query=dummy_vector,
-                        filter=Filter(
-                            must=[
-                                FieldCondition(
-                                    key="parent_asin",
-                                    match=MatchValue(value=product_id)
-                                )
-                            ]
+            # 1. First try direct lookup by parent_asin
+            scroll_results = []
+            try:
+                scroll_results, _ = qdrant_client.scroll(
+                    collection_name=collection_name,
+                    scroll_filter=Filter(
+                        must=[
+                            FieldCondition(
+                                key="parent_asin",
+                                match=MatchValue(value=product_id)
+                            )
+                        ]
                     ),
-                        using="text-embedding-model-3-small",
-                        limit=20
-                    )
-                ],
-                query=FusionQuery(fusion="rrf"),
-                limit=1,
-            )
-            if not payload.points:
-                print(f"Product {product_id} not found in Qdrant; skipping.")
-                continue
-            payload = payload.points[0].payload or {}
+                    limit=1,
+                    with_payload=True,
+                    with_vectors=False,
+                )
+            except Exception as e:
+                # If index is missing on parent_asin, create it and retry
+                if "Index required" in str(e) or "parent_asin" in str(e):
+                    try:
+                        qdrant_client.create_payload_index(
+                            collection_name=collection_name,
+                            field_name="parent_asin",
+                            field_schema=PayloadSchemaType.KEYWORD,
+                        )
+                        scroll_results, _ = qdrant_client.scroll(
+                            collection_name=collection_name,
+                            scroll_filter=Filter(
+                                must=[
+                                    FieldCondition(
+                                        key="parent_asin",
+                                        match=MatchValue(value=product_id)
+                                    )
+                                ]
+                            ),
+                            limit=1,
+                            with_payload=True,
+                            with_vectors=False,
+                        )
+                    except Exception:
+                        pass
 
-            product_image_url = payload.get("image")
-            price = payload.get("price")
+            product_image_url = None
+            price = None
+
+            if scroll_results:
+                payload = scroll_results[0].payload or {}
+                product_image_url = payload.get("image") or payload.get("image_url") or ""
+                price = payload.get("price")
+            else:
+                # 2. Resilient fallback: If product_id was a title, description, or slug, search for it
+                search_query = product_id.replace("_", " ").strip()
+                try:
+                    search_res = retrieve_data(search_query, qdrant_client, collection_name=collection_name, k=1)
+                    if search_res[1] and search_res[1][0]:
+                        product_id = search_res[1][0]
+                        product_image_url = (search_res[4][0] if search_res[4] else "") or ""
+                        price = search_res[5][0] if search_res[5] else None
+                    else:
+                        print(f"Product {product_id} not found in Qdrant; skipping.")
+                        continue
+                except Exception as e:
+                    print(f"Search fallback failed for {product_id}: {e}")
+                    continue
+
             currency = 'USD'
         
             # Check if item already exists
@@ -348,7 +386,6 @@ def add_to_shopping_cart(items: list[dict], user_id: str, cart_id: str) -> str:
 @traceable(
     name="Get Shopping Cart Item",
     run_type='tool'
-    
 )
 def get_shopping_cart(user_id:str,cart_id:str)->list[dict]:
     """

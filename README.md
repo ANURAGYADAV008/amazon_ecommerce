@@ -129,6 +129,14 @@ CO_API_KEY="your-cohere-api-key"
 # PostgreSQL Checkpointer (LangGraph Memory)
 DB_URI="postgresql://user:password@localhost:5434/ecommerce"
 
+# Chat request protection: 10 requests per client address per 60 seconds.
+# Use a distinct, long random value in production.
+CHAT_RATE_LIMIT_REQUESTS=10
+CHAT_RATE_LIMIT_WINDOW_SECONDS=60
+RATE_LIMIT_KEY_SALT="replace_with_a_long_random_secret"
+# Enable only when your host provides trusted forwarding headers.
+TRUST_PROXY_HEADERS=false
+
 # FastAPI Backend URL
 API_URL="http://localhost:8002"
 

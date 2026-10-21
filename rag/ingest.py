@@ -14,7 +14,7 @@ import uuid
 from openai import OpenAI # type: ignore
 from dotenv import load_dotenv  # type: ignore
 from qdrant_client import QdrantClient  # type: ignore
-from qdrant_client.models import Distance, VectorParams, PointStruct  # type: ignore
+from qdrant_client.models import Distance, VectorParams, PointStruct, PayloadSchemaType  # type: ignore
 
 load_dotenv()
 
@@ -79,6 +79,11 @@ def main() -> None:
     qdrant.recreate_collection(
         collection_name=COLLECTION,
         vectors_config=VectorParams(size=EMBED_DIM, distance=Distance.COSINE),
+    )
+    qdrant.create_payload_index(
+        collection_name=COLLECTION,
+        field_name="parent_asin",
+        field_schema=PayloadSchemaType.KEYWORD,
     )
 
     items = load_items(DATA_PATH)
