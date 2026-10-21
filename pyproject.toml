@@ -17,7 +17,6 @@ dependencies = [
     "numpy>=2.5.1",
     "openai>=2.45.0",
     "pandas>=3.0.3",
-    "psycopg-binary>=3.3.5",
     "psycopg2-binary>=2.9.13",
     "pydantic>=2.13.4",
     "python-dotenv>=1.2.2",
