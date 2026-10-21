@@ -1,0 +1,12 @@
+tests/
+data/
+uploads/
+qdrant_storage/
+postgres_data/
+*.zip
+*.tar
+*.tar.gz
+*.onnx
+*.pt
+*.pth
+*.bin
