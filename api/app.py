@@ -1,5 +1,7 @@
 import logging
+import os
 from fastapi import APIRouter, FastAPI, Request  # pyright: ignore[reportMissingImports]
+from fastapi.middleware.cors import CORSMiddleware  # pyright: ignore[reportMissingImports]
 from .models import RAGRequest,RAGResponse,RAGUsedContext,FeedbackRequest,FeedbackResponse
 from .middleware import RequestIDMiddleware
 from .Agent.graph import rag_agent_wrapper
@@ -47,8 +49,40 @@ api_router = APIRouter()
 api_router.include_router(rag_router, prefix="/rag", tags=["rag"])
 api_router.include_router(feedback_router, prefix="/submit_feedback", tags=["feedback"])
 
+
+def _cors_origins() -> list[str]:
+    """Origins allowed to call the API from a browser.
+
+    Set CORS_ORIGINS to a comma-separated list to override the defaults.
+    Vercel deployments (production and preview) are matched by regex below.
+    """
+    configured = os.getenv("CORS_ORIGINS", "")
+    origins = [
+        origin.strip().rstrip("/")
+        for origin in configured.split(",")
+        if origin.strip()
+    ]
+    if origins:
+        return origins
+
+    return [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:4173",
+        "http://127.0.0.1:4173",
+    ]
+
+
 app = FastAPI(title="Amazon Ecommerce RAG API")
 app.add_middleware(RequestIDMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins(),
+    allow_origin_regex=r"https://([a-z0-9-]+\.)*vercel\.app",
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["X-Request-ID"],
+)
 app.include_router(api_router)
 
 

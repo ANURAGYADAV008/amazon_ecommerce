@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 load_dotenv()
 import os
 
-DB_URI = os.environ.get("DB_URI", "postgresql://user:password@localhost:5434/ecommerce")
+DB_URI = os.environ.get("DB_URI")
 class CoordinatorAgentProperties(BaseModel):
     iteration:int=0
     final_answer:bool=False
@@ -192,7 +192,8 @@ def run_agent(question:str,thread_id:str)->dict:
 
     
 
-    db_uri = os.environ.get("DB_URI", DB_URI)
+    db_uri = os.environ.get("DB_URI")
+    assert db_uri is not None
     with PostgresSaver.from_conn_string(db_uri) as checkpointer:
         checkpointer.setup()
         graph = workflow.compile(checkpointer=checkpointer)

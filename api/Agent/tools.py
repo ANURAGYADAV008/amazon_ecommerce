@@ -218,7 +218,8 @@ def get_formatted_context(query: str, top_k: int = 6) -> str:
 from psycopg2.extras import RealDictCursor
 
 def get_db_connection():
-    db_uri = os.getenv("DATABASE_URL") or os.getenv("DB_URI", "postgresql://user:password@localhost:5434/ecommerce")
+    db_uri = os.getenv("DATABASE_URL") or os.getenv("DB_URI")
+    assert db_uri is not None
     conn = psycopg2.connect(db_uri)
     conn.autocommit = True
     with conn.cursor() as cursor:
