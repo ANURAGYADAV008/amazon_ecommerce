@@ -1,6 +1,6 @@
 import logging
 import os
-from fastapi import APIRouter, FastAPI, Request  # pyright: ignore[reportMissingImports]
+from fastapi import APIRouter, FastAPI, Request, HTTPException  # pyright: ignore[reportMissingImports]
 from fastapi.middleware.cors import CORSMiddleware  # pyright: ignore[reportMissingImports]
 from .models import RAGRequest,RAGResponse,RAGUsedContext,FeedbackRequest,FeedbackResponse
 from .middleware import RequestIDMiddleware
@@ -20,29 +20,43 @@ feedback_router = APIRouter()
 @rag_router.post("")
 @rag_router.post("/")
 def chat(request: Request, payload: RAGRequest) -> RAGResponse:
-    result = rag_agent_wrapper(payload.query, payload.thread_id)
-    return RAGResponse(
-        request_id=getattr(request.state, "request_id", ""),
-        answer=result['answer'],
-        used_context=[RAGUsedContext(**item) for item in result['used_context']],
-        trace_id=result.get('trace_id'),
-        shopping_cart=result.get('shopping_cart', []),
-    )
+    try:
+        result = rag_agent_wrapper(payload.query, payload.thread_id)
+        return RAGResponse(
+            request_id=getattr(request.state, "request_id", ""),
+            answer=result['answer'],
+            used_context=[RAGUsedContext(**item) for item in result['used_context']],
+            trace_id=result.get('trace_id'),
+            shopping_cart=result.get('shopping_cart', []),
+        )
+    except Exception as e:
+        logger.exception("Failed to process RAG chat request: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal error processing request: {str(e)}"
+        )
 
 
 @feedback_router.post("")
 @feedback_router.post("/")
 def send_feedback(request: Request, payload: FeedbackRequest) -> FeedbackResponse:
-    submit_feedback(
-        run_id=payload.run_id,
-        feedback_score=payload.feedback_score,
-        feedback_text=payload.feedback_text,
-        feedback_source_type=payload.feedback_source_type,
-    )
-    return FeedbackResponse(
-        request_id=getattr(request.state, "request_id", ""),
-        status="success",
-    )
+    try:
+        submit_feedback(
+            run_id=payload.run_id,
+            feedback_score=payload.feedback_score,
+            feedback_text=payload.feedback_text,
+            feedback_source_type=payload.feedback_source_type,
+        )
+        return FeedbackResponse(
+            request_id=getattr(request.state, "request_id", ""),
+            status="success",
+        )
+    except Exception as e:
+        logger.exception("Failed to submit feedback: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal error submitting feedback: {str(e)}"
+        )
 
 
 api_router = APIRouter()

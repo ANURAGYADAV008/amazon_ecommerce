@@ -155,6 +155,9 @@ workflow.add_edge("shopping_cart_tool_node", "shopping_cart_agent")
 graph = workflow.compile()
 
 
+_checkpointer_setup_done = False
+
+
 def run_agent(question:str,thread_id:str)->dict:
     initial_state = {
         "messages": [{"role": "user", "content": question}],
@@ -190,12 +193,15 @@ def run_agent(question:str,thread_id:str)->dict:
         }
     }
 
-    
+    db_uri = os.environ.get("DB_URI") or os.environ.get("DATABASE_URL")
+    if not db_uri:
+        raise ValueError("DB_URI or DATABASE_URL environment variable is not set. Please add it to your environment or Vercel dashboard.")
 
-    db_uri = os.environ.get("DB_URI")
-    assert db_uri is not None
+    global _checkpointer_setup_done
     with PostgresSaver.from_conn_string(db_uri) as checkpointer:
-        checkpointer.setup()
+        if not _checkpointer_setup_done:
+            checkpointer.setup()
+            _checkpointer_setup_done = True
         graph = workflow.compile(checkpointer=checkpointer)
         result = graph.invoke(initial_state, config)
     return result

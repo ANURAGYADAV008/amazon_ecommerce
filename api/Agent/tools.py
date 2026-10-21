@@ -215,28 +215,33 @@ def get_formatted_context(query: str, top_k: int = 6) -> str:
     formatted_context, _ = get_formatted_context_with_metadata(query=query, top_k=top_k)
     return formatted_context
 
-from psycopg2.extras import RealDictCursor
+_shopping_cart_table_initialized = False
 
 def get_db_connection():
     db_uri = os.getenv("DATABASE_URL") or os.getenv("DB_URI")
-    assert db_uri is not None
+    if not db_uri:
+        raise ValueError("DATABASE_URL or DB_URI environment variable is not configured.")
     conn = psycopg2.connect(db_uri)
     conn.autocommit = True
-    with conn.cursor() as cursor:
-        cursor.execute("""
-            CREATE SCHEMA IF NOT EXISTS shopping_carts;
-            CREATE TABLE IF NOT EXISTS shopping_carts.shopping_cart_items (
-                id SERIAL PRIMARY KEY,
-                user_id VARCHAR(255) NOT NULL,
-                shopping_cart_id VARCHAR(255) NOT NULL,
-                product_id VARCHAR(255) NOT NULL,
-                price NUMERIC(10, 2),
-                quantity INTEGER NOT NULL DEFAULT 1,
-                currency VARCHAR(10) DEFAULT 'USD',
-                product_image_url TEXT,
-                added_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            );
-        """)
+
+    global _shopping_cart_table_initialized
+    if not _shopping_cart_table_initialized:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                CREATE SCHEMA IF NOT EXISTS shopping_carts;
+                CREATE TABLE IF NOT EXISTS shopping_carts.shopping_cart_items (
+                    id SERIAL PRIMARY KEY,
+                    user_id VARCHAR(255) NOT NULL,
+                    shopping_cart_id VARCHAR(255) NOT NULL,
+                    product_id VARCHAR(255) NOT NULL,
+                    price NUMERIC(10, 2),
+                    quantity INTEGER NOT NULL DEFAULT 1,
+                    currency VARCHAR(10) DEFAULT 'USD',
+                    product_image_url TEXT,
+                    added_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+        _shopping_cart_table_initialized = True
     return conn
 
 ## add To shopping Cart Tool
