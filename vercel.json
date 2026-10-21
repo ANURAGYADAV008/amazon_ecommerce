@@ -4,11 +4,5 @@
     "api/app.py": {
       "maxDuration": 60
     }
-  },
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/api/app.py"
-    }
-  ]
+  }
 }
