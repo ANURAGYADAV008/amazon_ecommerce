@@ -22,6 +22,7 @@ class RAGGenerationResponse(BaseModel):
 
 
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6335")
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 
 @traceable(
     name="embed_query",
@@ -182,7 +183,7 @@ def generate_chat(prompt):
 )
 def rag_pipeline(question, qdrant_client=None, top_k=5):
     if qdrant_client is None:
-        qdrant_client = QdrantClient(QDRANT_URL)
+        qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
 
     retrieved_context = retrieve_data(
         question,
@@ -219,7 +220,7 @@ def rag_pipeline(question, qdrant_client=None, top_k=5):
     name="rag_pipeline_wrapper"
 )
 def rag_pipeline_wrapper(question, topk=5):
-    qdrant_client = QdrantClient(url=QDRANT_URL)
+    qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
 
     result = rag_pipeline(question, qdrant_client, topk)
 

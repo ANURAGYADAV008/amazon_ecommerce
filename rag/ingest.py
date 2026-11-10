@@ -19,6 +19,7 @@ from qdrant_client.models import Distance, VectorParams, PointStruct, PayloadSch
 load_dotenv()
 
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6335")
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 COLLECTION = "Amazon_items_collection-00"
 EMBED_MODEL = "text-embedding-3-small"
 EMBED_DIM = 1536
@@ -74,7 +75,7 @@ def embed_batch(texts: list[str]) -> list[list[float]]:
 
 
 def main() -> None:
-    qdrant = QdrantClient(QDRANT_URL)
+    qdrant = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
 
     qdrant.recreate_collection(
         collection_name=COLLECTION,
