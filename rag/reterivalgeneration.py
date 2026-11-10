@@ -183,7 +183,7 @@ def generate_chat(prompt):
 )
 def rag_pipeline(question, qdrant_client=None, top_k=5):
     if qdrant_client is None:
-        qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
+        qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY, timeout=60)
 
     retrieved_context = retrieve_data(
         question,
@@ -220,7 +220,7 @@ def rag_pipeline(question, qdrant_client=None, top_k=5):
     name="rag_pipeline_wrapper"
 )
 def rag_pipeline_wrapper(question, topk=5):
-    qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
+    qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY, timeout=60)
 
     result = rag_pipeline(question, qdrant_client, topk)
 
