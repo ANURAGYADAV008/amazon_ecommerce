@@ -3,8 +3,11 @@ from openai import OpenAI  # type: ignore
 from dotenv import load_dotenv  # type: ignore
 from qdrant_client import QdrantClient  # type: ignore
 from qdrant_client.models import Distance,VectorParams,PointStruct,Filter,FieldCondition,MatchValue,Prefetch,Document,models  # type: ignore
+import cohere  # type: ignore
 load_dotenv()
 client=OpenAI()
+COHERE_API_KEY = os.getenv("CO_API_KEY") or os.getenv("COHERE_API_KEY")
+cohere_client = cohere.ClientV2(api_key=COHERE_API_KEY) if COHERE_API_KEY else None
 from langsmith import traceable,get_current_run_tree  # type: ignore
 import instructor
 import openai
@@ -49,18 +52,19 @@ def get_embedding(text,model="text-embedding-3-small"):
     name="reteriver_data",
     run_type="retriever"
 )
-def retrieve_data(query, qdrant_client, collection_name=None, k=5):
+def retrieve_data(query, qdrant_client, collection_name=None, k=5, candidate_limit=20):
     if collection_name is None:
         collection_name = os.getenv("QDRANT_COLLECTION_NAME", "Amazon-items-collection-02-hybrid-serach")
     query_embedding = get_embedding(query)
 
+    # 1. Stage 1: Broad hybrid retrieval from Qdrant (high recall)
     results = qdrant_client.query_points(
         collection_name=collection_name,
         prefetch=[
             Prefetch(
                 query=query_embedding,
                 using="text-embedding-model-3-small",
-                limit=20
+                limit=candidate_limit
             ),
             Prefetch(
                 query=Document(
@@ -68,29 +72,51 @@ def retrieve_data(query, qdrant_client, collection_name=None, k=5):
                     model="qdrant/bm25",
                 ),
                 using="bm25",
-                limit=20
+                limit=candidate_limit
             )
         ],
-        query=models.RrfQuery(rrf=models.Rrf(weights=[3,1])),
-        limit=k
+        query=models.RrfQuery(rrf=models.Rrf(weights=[3, 1])),
+        limit=candidate_limit
     )
 
-
-    retrieved_context_ids = []
-    retrieved_context = []
-    similarity_scores = []
-    retrieved_context_rating = []
-    retrieved_image_urls = []
-    retrieved_prices = []
-
+    candidates = []
     for point in results.points:
         payload = point.payload or {}
-        retrieved_context_ids.append(payload.get("parent_asin"))
-        retrieved_context.append(payload.get("description", ""))
-        retrieved_context_rating.append(payload.get("average_rating"))
-        similarity_scores.append(point.score)
-        retrieved_image_urls.append(payload.get("image_url", ""))
-        retrieved_prices.append(payload.get("price"))
+        candidates.append({
+            "id": payload.get("parent_asin"),
+            "description": payload.get("description", ""),
+            "rating": payload.get("average_rating"),
+            "score": point.score,
+            "image_url": payload.get("image_url", "") or payload.get("image", ""),
+            "price": payload.get("price"),
+        })
+
+    # 2. Stage 2: Cohere Reranking (high precision)
+    if cohere_client and candidates:
+        docs = [c["description"] for c in candidates]
+        try:
+            rerank_resp = cohere_client.rerank(
+                model="rerank-v3.5",
+                query=query,
+                documents=docs,
+                top_n=min(k, len(candidates))
+            )
+            top_candidates = [
+                {**candidates[item.index], "score": float(item.relevance_score)}
+                for item in rerank_resp.results
+            ]
+        except Exception as e:
+            # Graceful fallback if Cohere call fails
+            top_candidates = candidates[:k]
+    else:
+        top_candidates = candidates[:k]
+
+    retrieved_context_ids = [c["id"] for c in top_candidates]
+    retrieved_context = [c["description"] for c in top_candidates]
+    retrieved_context_rating = [c["rating"] for c in top_candidates]
+    similarity_scores = [c["score"] for c in top_candidates]
+    retrieved_image_urls = [c["image_url"] for c in top_candidates]
+    retrieved_prices = [c["price"] for c in top_candidates]
 
     return (
         retrieved_context,
